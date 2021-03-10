@@ -1,12 +1,11 @@
-package pagination
+package paginator
 
 import (
+	"gorm.io/gorm"
 	"math"
-
-	"github.com/jinzhu/gorm"
 )
 
-// Param 分页参数
+// Param 分頁參數
 type Param struct {
 	DB      *gorm.DB
 	Page    int
@@ -15,9 +14,9 @@ type Param struct {
 	ShowSQL bool
 }
 
-// Paginator 分页返回
+// Paginator 分頁返回
 type Paginator struct {
-	TotalRecord int         `json:"total_record"`
+	TotalRecord int64       `json:"total_record"`
 	TotalPage   int         `json:"total_page"`
 	Records     interface{} `json:"records"`
 	Offset      int         `json:"offset"`
@@ -27,8 +26,8 @@ type Paginator struct {
 	NextPage    int         `json:"next_page"`
 }
 
-// Paging 分页
-func Paging(p *Param, result interface{}) *Paginator {
+// Paging 分頁
+func Paging(p *Param, result interface{}, condition string, args ...string) *Paginator {
 	db := p.DB
 
 	if p.ShowSQL {
@@ -48,7 +47,7 @@ func Paging(p *Param, result interface{}) *Paginator {
 
 	done := make(chan bool, 1)
 	var paginator Paginator
-	var count int
+	var count int64
 	var offset int
 
 	go countRecords(db, result, done, &count)
@@ -58,8 +57,11 @@ func Paging(p *Param, result interface{}) *Paginator {
 	} else {
 		offset = (p.Page - 1) * p.Limit
 	}
-
-	db.Limit(p.Limit).Offset(offset).Find(result)
+	if condition != "" && args != nil {
+		db.Where(condition, args).Limit(p.Limit).Offset(offset).Find(result)
+	} else {
+		db.Limit(p.Limit).Offset(offset).Find(result)
+	}
 	<-done
 
 	paginator.TotalRecord = count
@@ -84,7 +86,7 @@ func Paging(p *Param, result interface{}) *Paginator {
 	return &paginator
 }
 
-func countRecords(db *gorm.DB, anyType interface{}, done chan bool, count *int) {
+func countRecords(db *gorm.DB, anyType interface{}, done chan bool, count *int64) {
 	db.Model(anyType).Count(count)
 	done <- true
 }
